@@ -1,6 +1,5 @@
 import streamlit as st
-import requests
-import json
+import google.generativeai as genai
 
 # ==========================================
 # 1. PAGE CONFIGURATION & INITIALIZATION
@@ -16,67 +15,48 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # ==========================================
-# 2. SECURITY & KEY INGESTION
+# 2. SECURITY & GOOGLE AI CONFIGURATION
 # ==========================================
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("🔒 Security Error: Streamlit Secrets mein 'GEMINI_API_KEY' nahi mila!")
     st.stop()
 
-API_KEY = st.secrets["GEMINI_API_KEY"]
+# Configure the official Google SDK
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # ==========================================
-# 3. CORE AI FUNCTION (STABLE V1 PAYLOAD FIX)
+# 3. CORE AI FUNCTION (OFFICIAL SDK METHOD)
 # ==========================================
 def generate_gemini_response(history):
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
-    headers = {'Content-Type': 'application/json'}
-    
-    # System instruction ko v1 compatible banane ke liye pehla element banayenge
     system_instruction = (
         "You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant "
         "inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). "
         "Keep your tone friendly, smart, and helpful. Always respond in the language the user speaks (Hindi, English, Hinglish)."
     )
     
-    contents = []
-    
-    # 100% Safe Approach: Pehle message mein hi system instruction context set kar dena
-    contents.append({
-        "role": "user",
-        "parts": [{"text": f"System Prompt Context: {system_instruction}"}]
-    })
-    contents.append({
-        "role": "model",
-        "parts": [{"text": "Understood. I am VAAK AI. I am ready to assist you intelligently and in your preferred language."}]
-    })
-    
-    # Baaki ki saari chat history append karna
-    for msg in history:
-        contents.append({
-            "role": "user" if msg["role"] == "user" else "model",
-            "parts": [{"text": msg["content"]}]
-        })
-    
-    payload = {
-        "contents": contents
-    }
-    
     try:
-        response = requests.post(url, headers=headers, json=payload)
-        response_json = response.json()
+        # Initializing the model using official Google SDK configuration
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=system_instruction
+        )
         
-        if "candidates" in response_json and len(response_json["candidates"]) > 0:
-            candidate = response_json["candidates"][0]
-            if "content" in candidate and "parts" in candidate["content"]:
-                return candidate["content"]["parts"][0]["text"]
+        # Formatting history structure for the official SDK
+        formatted_messages = []
+        for msg in history:
+            formatted_messages.append({
+                "role": "user" if msg["role"] == "user" else "model",
+                "parts": [msg["content"]]
+            })
+            
+        response = model.generate_content(formatted_messages)
         
-        if "error" in response_json:
-            return f"⚠️ API Error ({response_json['error'].get('code')}): {response_json['error'].get('message')}"
-            
-        return "⚠️ Error: Google API se valid response nahi mila."
-            
+        if response.text:
+            return response.text
+        return "⚠️ Error: Model se response nahi mil paya."
+        
     except Exception as e:
-        return f"⚠️ Connection Error: {str(e)}"
+        return f"⚠️ SDK Error: {str(e)}"
 
 # ==========================================
 # 4. USER INTERFACE (UI) & RENDERING
@@ -84,38 +64,38 @@ def generate_gemini_response(history):
 st.title("🎙️ VAAK AI")
 st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Gemini).")
 
-# Sidebar mein Clear Chat ka option
+# Sidebar settings for user flexibility
 with st.sidebar:
     st.header("⚙️ Settings")
     if st.button("🗑️ Clear Chat History"):
         st.session_state.chat_history = []
+        st.sidebar.success("History cleared!")
         st.rerun()
 
-# Purani saari chat screen par render karna
+# Render existing chat logs
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User Input Box
+# User Chat Interface Entry Point
 user_input = st.chat_input("VAAK se Gemini par kuch bhi puchein...", key="vaak_chat_input")
 
 if user_input:
-    # Screen par user ka message dikhao
+    # Render user prompt locally
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # History mein temporary save karo
+    # Store context in runtime engine state
     st.session_state.chat_history.append({"role": "user", "content": user_input})
         
-    # Assistant ka response generate karna
+    # Trigger model container interface pipeline
     with st.chat_message("assistant"):
         with st.spinner("VAAK soch raha hai..."):
             ai_response = generate_gemini_response(st.session_state.chat_history)
             st.markdown(ai_response)
             
-    # Agar response sahi hai, tabhi permanently save karo
+    # Conditional stack validation for transaction history integrity
     if not ai_response.startswith("⚠️"):
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
     else:
-        # Error aane par user ka temporary chat item remove kar do
         st.session_state.chat_history.pop()
