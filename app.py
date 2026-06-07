@@ -1,8 +1,9 @@
 import streamlit as st
-from groq import Groq
+import requests
+import json
 
 # ==========================================
-# 1. WEBSITE CONFIGURATION (LOOK & FEEL)
+# 1. PAGE CONFIGURATION & INITIALIZATION
 # ==========================================
 st.set_page_config(
     page_title="VAAK AI - The Cosmic Voice", 
@@ -10,67 +11,107 @@ st.set_page_config(
     layout="centered"
 )
 
+# Initialize Session State for Chat History
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 # ==========================================
-# 2. SECURITY & CLIENT INITIALIZATION
+# 2. SECURITY & KEY INGESTION
 # ==========================================
-# Streamlit secrets se Groq API Key check aur initialize karein
-if "GROQ_API_KEY" not in st.secrets:
-    st.error("🔒 Security Error: Streamlit Secrets mein 'GROQ_API_KEY' nahi mila!")
+# Production standard: Fetching token from Streamlit Encrypted Secrets Locker
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("🔒 Security Error: Streamlit Secrets mein 'GEMINI_API_KEY' nahi mila!")
     st.stop()
 
-# Groq ka official client initialize karein
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ==========================================
-# 3. CHAT INTERFACE & HISTORY
+# 3. CORE AI CORE FUNCTION (REST API BACKEND)
+# ==========================================
+def generate_gemini_response(prompt, history):
+    """
+    Direct REST API Call: Yeh method Enterprise keys (AQ.Ab8RN...) ko 
+    bina kisi validation restriction ke seedhe Google ke server par bypass karta hai.
+    """
+    # Gemini 1.5 Flash API Endpoint
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    # System Instruction for VAAK AI persona
+    system_instruction = (
+        "You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant "
+        "inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). "
+        "You possess vast knowledge about world history, science, literature, coding, and philosophy. "
+        "Keep your tone friendly, smart, and helpful. Always respond in the language the user speaks (Hindi, English, Hinglish)."
+    )
+    
+    # Constructing Payload with Full Chat Context
+    contents = []
+    for msg in history:
+        contents.append({
+            "role": "user" if msg["role"] == "user" else "model",
+            "parts": [{"text": msg["content"]}]
+        })
+    
+    # Current User Input Append
+    contents.append({
+        "role": "user",
+        "parts": [{"text": prompt}]
+    })
+    
+    payload = {
+        "contents": contents,
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 2048
+        }
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response_json = response.json()
+        
+        # Extracting the text response from Google's JSON structure
+        if "candidates" in response_json and len(response_json["candidates"]) > 0:
+            return response_json["candidates"][0]["content"]["parts"][0]["text"]
+        elif "error" in response_json:
+            return f"⚠️ API Error ({response_json['error'].get('code')}): {response_json['error'].get('message')}"
+        else:
+            return "⚠️ Error: Google API se invalid response mila."
+            
+    except Exception as e:
+        return f"⚠️ Connection Error: {str(e)}"
+
+# ==========================================
+# 4. USER INTERFACE (UI) & RENDERING
 # ==========================================
 st.title("🎙️ VAAK AI")
-st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Groq).")
+st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Gemini).")
 
-# System instruction jo AI ko smart banayegi
-system_prompt = (
-    "You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant "
-    "inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). "
-    "You possess vast knowledge about world history, science, literature, all kinds of books, "
-    "coding, philosophy, and general trivia. Keep your tone friendly, smart, and helpful. "
-    "Always respond in the language the user speaks (Hindi, English, Hinglish, etc.)."
-)
+# Render Existing Chat History from Session State
+for message in st.session_state.chat_history:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# Chat history ko maintain rakhne ke liye safe structure
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": system_prompt}]
-
-# Purani baatein screen par dikhane ke liye (System prompt ko chhupakar)
-for message in st.session_state.messages:
-    if message["role"] != "system":
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-# User se naya sawal lene ke liye input box
-user_input = st.chat_input("VAAK se kuch bhi puchein (Books, History, Science, Coding...)...")
+# User Input Entry Point
+user_input = st.chat_input("VAAK se Gemini par kuch bhi puchein...")
 
 if user_input:
-    # 1. User ka message screen par dikhayein aur save karein
+    # 1. Render and Save User Message
     with st.chat_message("user"):
         st.markdown(user_input)
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # 2. AI se live jawab mangein
+        
+    # 2. Trigger Model Inference with Spinner
     with st.chat_message("assistant"):
         with st.spinner("VAAK soch raha hai..."):
-            try:
-                # Groq ka sabse naya aur powerful model: Llama 3 8B
-                chat_completion = client.chat.completions.create(
-                    messages=st.session_state.messages,
-                    model="llama3-8b-8192",
-                )
-                
-                # Jawab ko extract karein aur screen par dikhayein
-                reply = chat_completion.choices[0].message.content
-                st.markdown(reply)
-                
-                # Assistant ke jawab ko history mein save karein
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-                
-            except Exception as e:
-                st.error("⚠️ Error: Response lene mein dikkat aayi. Kripya check karein ki Secrets mein GROQ_API_KEY sahi hai ya nahi.")
+            ai_response = generate_gemini_response(user_input, st.session_state.chat_history)
+            st.markdown(ai_response)
+            
+    # 3. Commit both to history for context tracking
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
+    st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+    
