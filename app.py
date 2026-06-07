@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 
 # ==========================================
 # 1. WEBSITE CONFIGURATION (LOOK & FEEL)
@@ -11,70 +11,66 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. SECURITY SETUP (STREAMLIT SECRETS)
+# 2. SECURITY & CLIENT INITIALIZATION
 # ==========================================
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    else:
-        st.error("🔒 Security Error: Streamlit Secrets mein 'GEMINI_API_KEY' nahi mila!")
-        st.stop()
-except Exception as e:
-    st.error(f"🔒 Configuration Error: {str(e)}")
+# Streamlit secrets se Groq API Key check aur initialize karein
+if "GROQ_API_KEY" not in st.secrets:
+    st.error("🔒 Security Error: Streamlit Secrets mein 'GROQ_API_KEY' nahi mila!")
     st.stop()
 
-# ==========================================
-# 3. SYSTEM INSTRUCTIONS FOR VAAK AI
-# ==========================================
-system_instruction = """
-You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). You possess vast knowledge about world history, science, literature, all kinds of books, coding, philosophy, and general trivia.
-
-RULES:
-1. Answer any question the user asks with deep knowledge, logic, and accuracy, drawing from your vast database of books and global wisdom.
-2. Keep your tone friendly, incredibly smart, and helpful.
-3. Always respond in the language the user speaks (Hindi, English, Hinglish, etc.).
-"""
-
-# Gemini model ko load karein
-try:
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=system_instruction
-    )
-except Exception as e:
-    st.error("⚠️ Model load karne mein dikkat aayi.")
-    st.stop()
+# Groq ka official client initialize karein
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # ==========================================
-# 4. CHAT INTERFACE & HISTORY
+# 3. CHAT INTERFACE & HISTORY
 # ==========================================
 st.title("🎙️ VAAK AI")
-st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana.")
+st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Groq).")
 
-# Chat history ko maintain rakhne ke liye ekdam sahi syntax
-if "chat_session" not in st.session_state:
-    st.session_state.chat_session = model.start_chat(history=[])
+# System instruction jo AI ko smart banayegi
+system_prompt = (
+    "You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant "
+    "inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). "
+    "You possess vast knowledge about world history, science, literature, all kinds of books, "
+    "coding, philosophy, and general trivia. Keep your tone friendly, smart, and helpful. "
+    "Always respond in the language the user speaks (Hindi, English, Hinglish, etc.)."
+)
 
-# Purani baatein screen par dikhane ke liye
-for message in st.session_state.chat_session.history:
-    role = "user" if message.role == "user" else "assistant"
-    with st.chat_message(role):
-        st.markdown(message.parts[0].text)
+# Chat history ko maintain rakhne ke liye safe structure
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "system", "content": system_prompt}]
 
-# User input box
-user_input = st.chat_input("VAAK se kuch bhi puchein...")
+# Purani baatein screen par dikhane ke liye (System prompt ko chhupakar)
+for message in st.session_state.messages:
+    if message["role"] != "system":
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+# User se naya sawal lene ke liye input box
+user_input = st.chat_input("VAAK se kuch bhi puchein (Books, History, Science, Coding...)...")
 
 if user_input:
-    # User ka message screen par dikhayein
+    # 1. User ka message screen par dikhayein aur save karein
     with st.chat_message("user"):
         st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # AI se live jawab mangein
+    # 2. AI se live jawab mangein
     with st.chat_message("assistant"):
         with st.spinner("VAAK soch raha hai..."):
             try:
-                response = st.session_state.chat_session.send_message(user_input)
-                st.markdown(response.text)
-            except Exception as e:
-                st.error("⚠️ Error: Jawab nahi mil paya. Kripya check karein ki Streamlit Secrets mein API Key sahi se save hai ya nahi.")
+                # Groq ka sabse naya aur powerful model: Llama 3 8B
+                chat_completion = client.chat.completions.create(
+                    messages=st.session_state.messages,
+                    model="llama3-8b-8192",
+                )
                 
+                # Jawab ko extract karein aur screen par dikhayein
+                reply = chat_completion.choices[0].message.content
+                st.markdown(reply)
+                
+                # Assistant ke jawab ko history mein save karein
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                
+            except Exception as e:
+                st.error("⚠️ Error: Response lene mein dikkat aayi. Kripya check karein ki Secrets mein GROQ_API_KEY sahi hai ya nahi.")
