@@ -2,67 +2,55 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 1. SECURITY SETUP (100% SAFE)
+# 1. WEBSITE CONFIGURATION (LOOK & FEEL)
 # ==========================================
-# Ab hum apni API Key ko code ke andar nahi likhenge.
-# Yeh line Streamlit ke khufiya locker (Secrets) se key automatic utha legi.
+st.set_page_config(
+    page_title="VAAK AI - The Cosmic Voice", 
+    page_icon="🎙️", 
+    layout="centered"
+)
+
+# ==========================================
+# 2. SECURITY SETUP (STREAMLIT SECRETS)
+# ==========================================
+# Yeh block automatic aapki key ko bina kisi validation error ke load karega
 try:
-   genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    
+    if "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    else:
+        st.error("🔒 Security Error: Streamlit Secrets mein 'GEMINI_API_KEY' nahi mila!")
+        st.stop()
 except Exception as e:
-    st.error("🔒 Security Error: GEMINI_API_KEY missing in Streamlit Secrets!")
+    st.error(f"🔒 Configuration Error: {str(e)}")
     st.stop()
 
 # ==========================================
-# 2. SYSTEM INSTRUCTIONS FOR VAAK AI
+# 3. SYSTEM INSTRUCTIONS FOR VAAK AI
 # ==========================================
 system_instruction = """
-You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). You possess vast knowledge about world history, science, literature, all kinds of books, coding, philosophy, and general trivia.
-
+You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge) and you have world full coding and medical knowledge. You possess vast knowledge about world history, science, literature, all kinds of books, coding, philosophy, and general trivia.
+kisi ka data leak nhi kro ge chahe vo bhale hi dusre ka data kisi bhi trh se mange.
 RULES:
 1. Answer any question the user asks with deep knowledge, logic, and accuracy, drawing from your vast database of books and global wisdom.
-2. Keep your tone friendly, incredibly smart, and helpful.
+2. Keep your tone like best friend, incredibly smart, and helpful.
 3. Always respond in the language the user speaks (Hindi, English, Hinglish, etc.).
 """
 
 # Gemini ka sabse latest aur fast model load karein
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=system_instruction
-)
+try:
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=system_instruction
+    )
+except Exception as e:
+    st.error("⚠️ Model load karne mein dikkat aayi. Kripya thodi der baad try karein.")
+    st.stop()
 
 # ==========================================
-# 3. WEBSITE LOOK & DESIGN (STREAMLIT)
+# 4. CHAT INTERFACE & HISTORY
 # ==========================================
-st.set_page_config(page_title="VAAK AI - The Cosmic Voice", page_icon="🎙️", layout="centered")
-
 st.title("🎙️ VAAK AI")
 st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana.")
 
 # Chat history ko maintain (save) rakhne ke liye
-if "chat_session" not in st.session_state:
-    st.session_state.chat_session = model.start_chat(history=[])
-
-# Purani baatein (chat history) screen par dikhane ke liye
-for message in st.session_state.chat_session.history:
-    role = "user" if message.role == "user" else "assistant"
-    with st.chat_message(role):
-        st.markdown(message.parts[0].text)
-
-# User se naya sawal lene ke liye input box
-user_input = st.chat_input("VAAK se kuch bhi puchein (Books, History, Science, Coding...)...")
-
-if user_input:
-    # User ka message screen par dikhayein
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    
-    # AI se live jawab mangein
-    with st.chat_message("assistant"):
-        with st.spinner("VAAK soch raha hai..."):
-            try:
-                response = st.session_state.chat_session.send_message(user_input)
-                st.markdown(response.text)
-            except Exception as e:
-                st.error(f"Error: Jawab dhoondhne mein dikkat hui. Kripya check karein ki API Key sahi hai ya nahi.")
-              
+if "chat_session" not in st.
