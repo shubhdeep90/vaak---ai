@@ -25,10 +25,11 @@ if "GEMINI_API_KEY" not in st.secrets:
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ==========================================
-# 3. CORE AI FUNCTION (UPGRADED TO 1.5 FLASH)
+# 3. CORE AI FUNCTION (STABLE V1 ENDPOINT)
 # ==========================================
 def generate_gemini_response(history):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    # UNIVERSAL STABLE URL (v1 use kar rahe hain taaki 404 error kabhi na aaye)
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     headers = {'Content-Type': 'application/json'}
     
     system_instruction = (
@@ -74,6 +75,13 @@ def generate_gemini_response(history):
 st.title("🎙️ VAAK AI")
 st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Gemini).")
 
+# Sidebar mein Clear Chat ka option (Tab users ke liye special facility)
+with st.sidebar:
+    st.header("⚙️ Settings")
+    if st.button("🗑️ Clear Chat History"):
+        st.session_state.chat_history = []
+        st.rerun()
+
 # Purani saari chat screen par render karna
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
@@ -83,22 +91,21 @@ for message in st.session_state.chat_history:
 user_input = st.chat_input("VAAK se Gemini par kuch bhi puchein...", key="vaak_chat_input")
 
 if user_input:
-    # 1. Screen par user ka message dikhao
+    # Screen par instant user ka message dikhao
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # 2. History mein temporary save karo taaki AI sawal samajh sake
+    # History mein save karo
     st.session_state.chat_history.append({"role": "user", "content": user_input})
         
-    # 3. Assistant ka response generate karna aur realtime display karna
+    # Assistant ka response generate karna
     with st.chat_message("assistant"):
         with st.spinner("VAAK soch raha hai..."):
             ai_response = generate_gemini_response(st.session_state.chat_history)
             st.markdown(ai_response)
             
-    # 4. Professional Fix: Agar response sahi hai, tabhi permanently save karo
     if not ai_response.startswith("⚠️"):
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
     else:
-        # Error aane par user ka temporary chat item remove kar do taaki data clean rahe
         st.session_state.chat_history.pop()
+        
