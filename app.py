@@ -25,13 +25,13 @@ if "GEMINI_API_KEY" not in st.secrets:
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ==========================================
-# 3. CORE AI FUNCTION (STABLE V1 ENDPOINT)
+# 3. CORE AI FUNCTION (STABLE V1 PAYLOAD FIX)
 # ==========================================
 def generate_gemini_response(history):
-    # UNIVERSAL STABLE URL (v1 use kar rahe hain taaki 404 error kabhi na aaye)
     url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     headers = {'Content-Type': 'application/json'}
     
+    # System instruction ko v1 compatible banane ke liye pehla element banayenge
     system_instruction = (
         "You are VAAK AI, a highly intelligent, universal, and all-knowing AI Assistant "
         "inspired by the ancient Vedic concept of 'Vak' (The Cosmic Voice & Absolute Knowledge). "
@@ -39,6 +39,18 @@ def generate_gemini_response(history):
     )
     
     contents = []
+    
+    # 100% Safe Approach: Pehle message mein hi system instruction context set kar dena
+    contents.append({
+        "role": "user",
+        "parts": [{"text": f"System Prompt Context: {system_instruction}"}]
+    })
+    contents.append({
+        "role": "model",
+        "parts": [{"text": "Understood. I am VAAK AI. I am ready to assist you intelligently and in your preferred language."}]
+    })
+    
+    # Baaki ki saari chat history append karna
     for msg in history:
         contents.append({
             "role": "user" if msg["role"] == "user" else "model",
@@ -46,10 +58,7 @@ def generate_gemini_response(history):
         })
     
     payload = {
-        "contents": contents,
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        }
+        "contents": contents
     }
     
     try:
@@ -75,7 +84,7 @@ def generate_gemini_response(history):
 st.title("🎙️ VAAK AI")
 st.caption("The Cosmic Voice: Duniya ki saari books aur gyaan ka ek hi thikana (Powered by Gemini).")
 
-# Sidebar mein Clear Chat ka option (Tab users ke liye special facility)
+# Sidebar mein Clear Chat ka option
 with st.sidebar:
     st.header("⚙️ Settings")
     if st.button("🗑️ Clear Chat History"):
@@ -91,11 +100,11 @@ for message in st.session_state.chat_history:
 user_input = st.chat_input("VAAK se Gemini par kuch bhi puchein...", key="vaak_chat_input")
 
 if user_input:
-    # Screen par instant user ka message dikhao
+    # Screen par user ka message dikhao
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # History mein save karo
+    # History mein temporary save karo
     st.session_state.chat_history.append({"role": "user", "content": user_input})
         
     # Assistant ka response generate karna
@@ -104,8 +113,9 @@ if user_input:
             ai_response = generate_gemini_response(st.session_state.chat_history)
             st.markdown(ai_response)
             
+    # Agar response sahi hai, tabhi permanently save karo
     if not ai_response.startswith("⚠️"):
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
     else:
+        # Error aane par user ka temporary chat item remove kar do
         st.session_state.chat_history.pop()
-        
