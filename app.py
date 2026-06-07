@@ -7,8 +7,8 @@ import google.generativeai as genai
 # Ab hum apni API Key ko code ke andar nahi likhenge.
 # Yeh line Streamlit ke khufiya locker (Secrets) se key automatic utha legi.
 try:
-    GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=GOOGLE_API_KEY)
+   genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    
 except Exception as e:
     st.error("🔒 Security Error: GEMINI_API_KEY missing in Streamlit Secrets!")
     st.stop()
